@@ -108,13 +108,13 @@ class GarminPageTurnerAppDelegate extends WatchUi.InputDelegate {
                     var az = zSamples[i];
                     // Magnitude squared — avoids expensive sqrt
                     // Rest: ~1,000,000 (1g²)
-                    // Threshold: 1.8g → 1800² = 3,240,000
+                    // Threshold: 2.2g → 2200² = 4,840,000
                     var magSq = ax * ax + ay * ay + az * az;
-                    if (magSq > 3300000) {
+                    if (magSq > 4840000) {
                         sendAction("right");
-                        // 1-second cooldown to prevent double-triggers
+                        // 2-second cooldown to prevent double-triggers
                         mFlickCooldown = true;
-                        mCooldownTimer.start(method(:onCooldownExpired), 1000, false);
+                        mCooldownTimer.start(method(:onCooldownExpired), 2000, false);
                         return;
                     }
                 }
