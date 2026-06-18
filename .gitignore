@@ -1,0 +1,33 @@
+# System
+.DS_Store
+*.log
+*.code-workspace
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.settings/
+.classpath
+
+# Android Companion
+android-companion/.gradle/
+android-companion/build/
+android-companion/*/build/
+android-companion/local.properties
+android-companion/*.apk
+android-companion/*.aar
+android-companion/captures/
+android-companion/.externalNativeBuild
+android-companion/.cxx
+
+# Garmin CIQ
+garmin-page-turner/bin/
+garmin-page-turner/gen/
+garmin-page-turner/mir/
+garmin-page-turner/internal-mir/
+garmin-page-turner/external-mir/
+garmin-page-turner/*.prg
+garmin-page-turner/*.debug.xml

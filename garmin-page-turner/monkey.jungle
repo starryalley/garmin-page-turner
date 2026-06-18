@@ -1,0 +1,2 @@
+# Garmin Page Turner Build Configuration
+project.manifest = manifest.xml

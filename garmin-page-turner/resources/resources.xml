@@ -1,0 +1,6 @@
+<resources>
+    <string id="AppName">Page Turner</string>
+    <drawables>
+        <bitmap id="LauncherIcon" filename="launcher_icon.png" />
+    </drawables>
+</resources>

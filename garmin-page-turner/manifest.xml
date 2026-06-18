@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Garmin Page Turner Manifest -->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application entry="GarminPageTurnerApp" id="a94b3c7d-de34-4b5c-897a-624e5482312b" launcherIcon="@Drawables.LauncherIcon" name="@Strings.AppName" type="watch-app">
+        <iq:products>
+            <!-- Fenix 7 Series -->
+            <iq:product id="fenix7"/>
+            <iq:product id="fenix7s"/>
+            <iq:product id="fenix7x"/>
+            <iq:product id="fenix7pro"/>
+            <iq:product id="fenix7spro"/>
+            <iq:product id="fenix7xpro"/>
+            <!-- Epix Gen 2 Series -->
+            <iq:product id="epix2"/>
+            <iq:product id="epix2pro42mm"/>
+            <iq:product id="epix2pro47mm"/>
+            <iq:product id="epix2pro51mm"/>
+            <!-- Forerunner Touch Series -->
+            <iq:product id="fr955"/>
+            <iq:product id="fr965"/>
+            <iq:product id="fr265"/>
+            <iq:product id="fr265s"/>
+            <!-- Venu Series -->
+            <iq:product id="venu"/>
+            <iq:product id="venu2"/>
+            <iq:product id="venu2s"/>
+            <iq:product id="venu3"/>
+            <iq:product id="venu3s"/>
+            <iq:product id="venusq2"/>
+            <!-- Vivoactive Series -->
+            <iq:product id="vivoactive5"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+            <iq:uses-permission id="Sensor"/>
+        </iq:permissions>
+        <iq:languages/>
+    </iq:application>
+</iq:manifest>
