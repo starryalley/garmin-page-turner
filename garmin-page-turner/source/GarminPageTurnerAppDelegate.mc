@@ -89,47 +89,139 @@ class GarminPageTurnerAppDelegate extends WatchUi.InputDelegate {
         }
     }
 
-    // High-frequency accelerometer callback (25 Hz batched every 1 second)
-    // Detects a wrist flick by checking total acceleration magnitude across all axes.
-    // At rest, magnitude² ≈ 1,000,000 (1g from gravity).
-    // A deliberate wrist flick spikes total acceleration well above 1g.
+    var mSampleCounter = 0;
+
+    var mGestureState = 0; // 0=idle, 1=saw negative Z spike
+    var mGestureAge = 0;
+
+    var mRestCount = 0;
+
     function onSensorData(sensorData as Sensor.SensorData) as Void {
-        if (mFlickCooldown) {
-            return; // Still in cooldown from last flick
+        if (sensorData.accelerometerData == null) {
+            return;
         }
 
-        if (sensorData.accelerometerData != null) {
-            var xSamples = sensorData.accelerometerData.x;
-            var ySamples = sensorData.accelerometerData.y;
-            var zSamples = sensorData.accelerometerData.z;
-            if (xSamples != null && ySamples != null && zSamples != null) {
-                // Scan all 25 samples in this batch
-                for (var i = 0; i < xSamples.size(); i++) {
-                    var ax = xSamples[i];
-                    var ay = ySamples[i];
-                    var az = zSamples[i];
-                    // Magnitude squared — avoids expensive sqrt
-                    // Rest: ~1,000,000 (1g²)
-                    // Threshold: 2.2g → 2200² = 4,840,000
-                    var magSq = ax * ax + ay * ay + az * az;
-                    if (magSq > 4840000) {
-                        sendAction("right");
-                        // 2-second cooldown to prevent double-triggers
-                        mFlickCooldown = true;
-                        mCooldownTimer.start(method(:onCooldownExpired), 2000, false);
-                        return;
-                    }
+        var xs = sensorData.accelerometerData.x;
+        var ys = sensorData.accelerometerData.y;
+        var zs = sensorData.accelerometerData.z;
+
+        if (xs == null || ys == null || zs == null) {
+            return;
+        }
+
+        //var batchTs = System.getTimer();
+
+        for (var i = 0; i < xs.size(); i++) {
+            var x = xs[i];
+            var y = ys[i];
+            var z = zs[i];
+
+            //var ts = batchTs + i * 40;
+            var magSq = x*x + y*y + z*z;
+
+            var looksRestingOnKeyboard =
+                (z < -700 && z > -1400) &&
+                (x > -700 && x < 1000) &&
+                (y > -1000 && y < 1000);
+
+            if (mGestureState == 0 && looksRestingOnKeyboard) {
+                mRestCount += 1;
+            } else if (mGestureState == 0) {
+                if (mRestCount > 0) {
+                    mRestCount -= 1;
+                }
+            }
+
+            // Log only useful samples/events.
+            if (
+                z < -1800 ||
+                z > 500 ||
+                magSq > 2500000 ||
+                mGestureState != 0 ||
+                looksRestingOnKeyboard
+            ) {
+                // System.println(
+                //     "S," +
+                //     mSampleCounter + "," +
+                //     ts + "," +
+                //     x + "," +
+                //     y + "," +
+                //     z + "," +
+                //     magSq + "," +
+                //     mGestureState + "," +
+                //     mRestCount
+                // );
+            }
+
+            mSampleCounter += 1;
+
+            if (mFlickCooldown) {
+                continue;
+            }
+
+            if (mGestureState == 0) {
+                // Require recent keyboard-rest posture first.
+                if (mRestCount >= 4 && z < -2200) {
+                    // System.println(
+                    //     "NEG," +
+                    //     mSampleCounter + "," +
+                    //     ts + "," +
+                    //     x + "," +
+                    //     y + "," +
+                    //     z + "," +
+                    //     mRestCount
+                    // );
+
+                    mGestureState = 1;
+                    mGestureAge = 0;
+                }
+
+            } else if (mGestureState == 1) {
+                mGestureAge += 1;
+
+                // Positive rebound after negative Z spike.
+                if (z > 1000) {
+                    // System.println(
+                    //     "FLICK," +
+                    //     mSampleCounter + "," +
+                    //     ts + "," +
+                    //     x + "," +
+                    //     y + "," +
+                    //     z
+                    // );
+
+                    sendAction("right");
+
+                    mGestureState = 0;
+                    mGestureAge = 0;
+                    mRestCount = 0;
+
+                    mFlickCooldown = true;
+                    mCooldownTimer.start(method(:onCooldownExpired), 1500, false);
+                    return;
+                }
+
+                // Too slow: reject.
+                if (mGestureAge > 12) {
+                    // System.println(
+                    //     "TIMEOUT," +
+                    //     mSampleCounter + "," +
+                    //     ts
+                    // );
+
+                    mGestureState = 0;
+                    mGestureAge = 0;
+                    mRestCount = 0;
                 }
             }
         }
     }
 
-    // Called when cooldown period ends — re-enables flick detection
     function onCooldownExpired() as Void {
         mFlickCooldown = false;
     }
-}
 
+}
 // ConnectionListener subclass to handle transmission success/error states
 class PageTurnerCommListener extends Communications.ConnectionListener {
     private var mView;
