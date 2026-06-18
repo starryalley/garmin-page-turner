@@ -4,6 +4,12 @@ Turn pages on your E-Reader or tablet using your Garmin watch!
 
 This project allows you to control reading applications (like Kindle, Kobo, or generic PDF readers) by sending page-turn commands from your Garmin watch. It works by using an Android phone as a bridge that emulates a Bluetooth HID Keyboard. In addition there is a Refresh command that's specifically for Eink devices (tested only on Boox tablets).
 
+## 📸 Screenshots
+
+| Garmin Watch App | Android Companion App |
+|:---:|:---:|
+| <img src="screenshots/f7p.png" width="300"> | <img src="screenshots/companion.png" width="300"> |
+
 ## 🚀 How it Works
 
 1.  **Garmin Watch App**: Detects gestures (flicks) or button presses and sends a command to the paired Android phone via Garmin ConnectIQ Communications.
