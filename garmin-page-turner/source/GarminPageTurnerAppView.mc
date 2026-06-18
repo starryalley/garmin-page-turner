@@ -34,8 +34,9 @@ class GarminPageTurnerAppView extends WatchUi.View {
         // Divider coordinates
         var yDivider = (height * 0.75).toNumber();
         
-        // Vertical divider separating Left and Right zones (in the top 75%)
-        dc.drawLine(width / 2, 0, width / 2, yDivider);
+        // Vertical divider separating Left and Right zones (in the top 75%), 20% LEFT and 80% RIGHT
+        var xDivider = (width * 0.20).toNumber();
+        dc.drawLine(xDivider, 0, xDivider, yDivider);
         
         // Horizontal divider separating Left/Right zones from Bottom Refresh zone
         dc.drawLine(0, yDivider, width, yDivider);
@@ -43,12 +44,24 @@ class GarminPageTurnerAppView extends WatchUi.View {
         // Draw buttons/text labels
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         
-        // Left Page Turn Label
-        dc.drawText(width * 0.25, height * 0.35, Graphics.FONT_LARGE, "<", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        
-        // Right Page Turn Label
-        dc.drawText(width * 0.75, height * 0.35, Graphics.FONT_LARGE, ">", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        
+        // Left label center
+        dc.drawText(
+            xDivider / 2,
+            height * 0.35,
+            Graphics.FONT_LARGE,
+            "<",
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+        );
+
+        // Right label center
+        dc.drawText(
+            xDivider + ((width - xDivider) / 2),
+            height * 0.35,
+            Graphics.FONT_LARGE,
+            ">",
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+        );
+
         // Refresh Label
         dc.drawText(width / 2, height * 0.86, Graphics.FONT_SMALL, "REFRESH", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 

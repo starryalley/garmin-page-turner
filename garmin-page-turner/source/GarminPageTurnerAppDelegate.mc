@@ -40,17 +40,19 @@ class GarminPageTurnerAppDelegate extends WatchUi.InputDelegate {
         var width = System.getDeviceSettings().screenWidth;
         var height = System.getDeviceSettings().screenHeight;
 
-        // Tap in the bottom 25% of the screen triggers a Screen Refresh
-        if (y > (height * 0.75)) {
+        var yDivider = (height * 0.75).toNumber(); // bottom 25%, top 75%
+        var xDivider = (width * 0.20).toNumber(); // left 20%, right 80%
+
+        if (y > yDivider) {
             sendAction("refresh");
         } else {
-            // Top 75% is divided in half: Left 50% = Left Page, Right 50% = Right Page
-            if (x < (width / 2)) {
+            if (x < xDivider) {
                 sendAction("left");
             } else {
                 sendAction("right");
             }
         }
+
         return true;
     }
 
