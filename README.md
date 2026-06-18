@@ -1,4 +1,4 @@
-# Garmin Page Turner Companion
+# Garmin Page Turner
 
 Turn pages on your E-Reader or tablet using your Garmin watch! 
 
