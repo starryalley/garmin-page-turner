@@ -5,30 +5,64 @@ import Toybox.Sensor;
 import Toybox.Lang;
 import Toybox.Timer;
 
-class GarminPageTurnerAppDelegate extends WatchUi.InputDelegate {
+class GarminPageTurnerAppDelegate extends WatchUi.BehaviorDelegate {
     private var mView;
     private var mFlickCooldown = false; // Prevents rapid-fire triggers
     private var mCooldownTimer;
+    private var mGesturesEnabled = false; // Disabled by default
 
     function initialize(view) {
-        InputDelegate.initialize();
+        BehaviorDelegate.initialize();
         mView = view;
         mCooldownTimer = new Timer.Timer();
+    }
 
-        // Register high-frequency accelerometer listener at 25 Hz
-        // This gives us 25 samples per second — much better for flick detection
-        var options = {
-            :period => 1,
-            :accelerometer => {
-                :enabled => true,
-                :sampleRate => 25
-            }
-        };
-        try {
-            Sensor.registerSensorDataListener(method(:onSensorData), options);
-        } catch (e) {
-            System.println("Accel registration failed: " + e.getErrorMessage());
+    // Toggles the gestures and handles registering/unregistering sensor
+    function setGesturesEnabled(enabled) {
+        mGesturesEnabled = enabled;
+        if (enabled) {
+            registerGestures();
+            mView.setStatus("Gestures On", null);
+        } else {
+            unregisterGestures();
+            mView.setStatus("Gestures Off", null);
         }
+    }
+
+    // Registers the high-frequency accelerometer listener if supported
+    function registerGestures() {
+        if (Sensor has :registerSensorDataListener) {
+            var options = {
+                :period => 1,
+                :accelerometer => {
+                    :enabled => true,
+                    :sampleRate => 25
+                }
+            };
+            try {
+                Sensor.registerSensorDataListener(method(:onSensorData), options);
+            } catch (e) {
+                System.println("Accel registration failed: " + e.getErrorMessage());
+            }
+        }
+    }
+
+    // Unregisters the high-frequency accelerometer listener and resets state
+    function unregisterGestures() {
+        if (Sensor has :registerSensorDataListener) {
+            try {
+                Sensor.unregisterSensorDataListener();
+            } catch (e) {
+                System.println("Accel unregistration failed: " + e.getErrorMessage());
+            }
+        }
+        if (mCooldownTimer != null) {
+            mCooldownTimer.stop();
+        }
+        mFlickCooldown = false;
+        mGestureState = 0;
+        mGestureAge = 0;
+        mRestCount = 0;
     }
 
     // Handles touchscreen tap events
@@ -70,6 +104,30 @@ class GarminPageTurnerAppDelegate extends WatchUi.InputDelegate {
             return true;
         }
         return false;
+    }
+
+    // Handles the menu behavior (e.g. physical menu button or key)
+    function onMenu() {
+        var menu = new WatchUi.Menu2({:title => "Settings"});
+        menu.addItem(
+            new WatchUi.ToggleMenuItem(
+                "Gestures",
+                {
+                    :enabled => "On",
+                    :disabled => "Off"
+                },
+                "gestures_toggle",
+                mGesturesEnabled,
+                null
+            )
+        );
+        WatchUi.pushView(menu, new GarminPageTurnerMenuDelegate(self), WatchUi.SLIDE_UP);
+        return true;
+    }
+
+    // Handles touchscreen long-press/hold event to trigger the menu
+    function onHold(clickEvent) {
+        return onMenu();
     }
 
     // Transmits the action command to the companion Android app
@@ -239,5 +297,27 @@ class PageTurnerCommListener extends Communications.ConnectionListener {
 
     function onError() {
         mView.setStatus("Failed", false);
+    }
+}
+
+// Menu2InputDelegate subclass to handle setting toggles
+class GarminPageTurnerMenuDelegate extends WatchUi.Menu2InputDelegate {
+    private var mAppDelegate;
+
+    function initialize(appDelegate) {
+        Menu2InputDelegate.initialize();
+        mAppDelegate = appDelegate;
+    }
+
+    function onSelect(item as WatchUi.MenuItem) as Void {
+        var id = item.getId();
+        if (id.equals("gestures_toggle")) {
+            var toggleItem = item as WatchUi.ToggleMenuItem;
+            mAppDelegate.setGesturesEnabled(toggleItem.isEnabled());
+        }
+    }
+
+    function onBack() as Void {
+        WatchUi.popView(WatchUi.SLIDE_DOWN);
     }
 }
