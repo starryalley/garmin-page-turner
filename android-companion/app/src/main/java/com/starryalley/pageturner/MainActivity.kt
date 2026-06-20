@@ -20,6 +20,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -350,7 +352,8 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Connection statuses (Watch & E-Reader)
@@ -360,10 +363,14 @@ class MainActivity : ComponentActivity() {
                 DeviceConnectionCard()
 
                 // Custom settings dropdown
-                SettingsCard()
+                if (connectionMode.value == 1) {
+                    SettingsCard()
+                }
 
                 // Monospace console logger
-                LogsConsole()
+                Box(modifier = Modifier.height(300.dp)) {
+                    LogsConsole()
+                }
             }
         }
     }
@@ -820,7 +827,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ColumnScope.LogsConsole() {
+    fun LogsConsole() {
         val listState = rememberLazyListState()
 
         // Auto-scroll list when new logs are added
@@ -835,7 +842,6 @@ class MainActivity : ComponentActivity() {
             colors = CardDefaults.cardColors(containerColor = Color(0xFF0F0F0F)), // Terminal Black
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
                 .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
         ) {
             Column(
