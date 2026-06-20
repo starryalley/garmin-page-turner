@@ -93,6 +93,12 @@ class BluetoothHidService : Service() {
             addLog("Mapping updated: " + getMappingDescription())
         }
 
+    // Connection mode and KOReader configuration
+    var connectionMode: Int = 1 // 1: Bluetooth HID, 2: KOReader HTTP
+    var koreaderIp: String = ""
+    var koreaderPort: Int = 8080
+    var isKoreaderConnected: Boolean = false
+
     // Callbacks for UI updates
     interface ServiceListener {
         fun onLogAdded()
@@ -459,21 +465,25 @@ class BluetoothHidService : Service() {
         addLog("Garmin SDK released.")
     }
 
-    // Map command and transmit HID keystroke
+    // Map command and transmit command via Bluetooth HID keystroke or HTTP
     private fun triggerKeyForCommand(command: String) {
-        val keyCode: Byte = when (command.lowercase()) {
-            "left" -> getLeftKeyCode()
-            "right" -> getRightKeyCode()
-            "refresh" -> HID_KEY_F4
-            else -> {
-                addLog("Unknown command string ignored: $command")
-                return
-            }
-        }
-
-        // Send keystroke IMMEDIATELY before logging to minimize latency
-        sendKeystroke(keyCode)
         addLog("Watch Command Received: '$command'")
+        if (connectionMode == 2) {
+            sendKoReaderCommand(command)
+        } else {
+            val keyCode: Byte = when (command.lowercase()) {
+                "left" -> getLeftKeyCode()
+                "right" -> getRightKeyCode()
+                "refresh" -> HID_KEY_F4
+                else -> {
+                    addLog("Unknown command string ignored: $command")
+                    return
+                }
+            }
+
+            // Send keystroke IMMEDIATELY before logging to minimize latency
+            sendKeystroke(keyCode)
+        }
     }
 
     private fun getLeftKeyCode(): Byte {
@@ -533,6 +543,80 @@ class BluetoothHidService : Service() {
         } catch (e: Exception) {
             addLog("HID press failure: ${e.message}")
         }
+    }
+
+    private fun sendKoReaderCommand(command: String) {
+        val event = when (command.lowercase()) {
+            "left" -> "GotoViewRel/-1"
+            "right" -> "GotoViewRel/1"
+            "refresh" -> "FullRefresh"
+            else -> return
+        }
+
+        val ip = koreaderIp
+        val port = koreaderPort
+        if (ip.isBlank()) {
+            addLog("KOReader Mode: IP address is blank.")
+            return
+        }
+
+        val urlString = "http://$ip:$port/koreader/event/$event"
+        addLog("KOReader sending command: $event")
+        
+        Thread {
+            try {
+                val url = java.net.URL(urlString)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 2000
+                connection.readTimeout = 2000
+                val responseCode = connection.responseCode
+                if (responseCode in 200..299) {
+                    addLog("KOReader command '$event' success ($responseCode)")
+                } else {
+                    addLog("KOReader command '$event' response: $responseCode")
+                }
+                connection.disconnect()
+            } catch (e: Exception) {
+                addLog("KOReader HTTP error: ${e.message}")
+            }
+        }.start()
+    }
+
+    fun connectToKoReader(ip: String, port: Int) {
+        koreaderIp = ip
+        koreaderPort = port
+        addLog("Connecting to KOReader at $ip:$port...")
+        
+        Thread {
+            try {
+                val urlString = "http://$ip:$port/koreader/event/GotoViewRel/0"
+                val url = java.net.URL(urlString)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 2000
+                connection.readTimeout = 2000
+                val responseCode = connection.responseCode
+                if (responseCode in 200..399) {
+                    isKoreaderConnected = true
+                    addLog("Connected to KOReader successfully!")
+                } else {
+                    isKoreaderConnected = false
+                    addLog("KOReader connection check failed (HTTP $responseCode)")
+                }
+                connection.disconnect()
+            } catch (e: Exception) {
+                isKoreaderConnected = false
+                addLog("KOReader connection failed: ${e.message}")
+            }
+            notifyStateChange()
+        }.start()
+    }
+
+    fun disconnectKoReader() {
+        isKoreaderConnected = false
+        addLog("Disconnected from KOReader.")
+        notifyStateChange()
     }
 
     // Helper functions for UI communication

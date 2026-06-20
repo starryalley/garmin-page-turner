@@ -60,10 +60,19 @@ class MainActivity : ComponentActivity() {
     private val mappingMode = mutableStateOf(1)
     private val permissionsGranted = mutableStateOf(false)
 
+    // Connection mode and KOReader state
+    private val connectionMode = mutableStateOf(1) // 1: Bluetooth HID, 2: KOReader HTTP
+    private val koreaderIp = mutableStateOf("")
+    private val koreaderPort = mutableStateOf("8080")
+    private val isKoreaderConnected = mutableStateOf(false)
+
     // State for selected device persistence in UI
     private val selectedDevice = mutableStateOf<BluetoothDevice?>(null)
     private val PREFS_NAME = "PageTurnerPrefs"
     private val KEY_LAST_DEVICE = "last_device_address"
+    private val KEY_CONNECTION_MODE = "connection_mode"
+    private val KEY_KOREADER_IP = "koreader_ip"
+    private val KEY_KOREADER_PORT = "koreader_port"
 
     // Service Connection lifecycle listener
     private val serviceConnection = object : ServiceConnection {
@@ -225,6 +234,17 @@ class MainActivity : ComponentActivity() {
                 selectedDevice.value = currentPaired.find { it.address == lastAddress } ?: currentPaired.first()
             }
         }
+
+        // Sync KOReader settings from preferences to UI and service
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        connectionMode.value = prefs.getInt(KEY_CONNECTION_MODE, 1)
+        koreaderIp.value = prefs.getString(KEY_KOREADER_IP, "") ?: ""
+        koreaderPort.value = prefs.getString(KEY_KOREADER_PORT, "8080") ?: "8080"
+        
+        s.connectionMode = connectionMode.value
+        s.koreaderIp = koreaderIp.value
+        s.koreaderPort = koreaderPort.value.toIntOrNull() ?: 8080
+        isKoreaderConnected.value = s.isKoreaderConnected
         
         mappingMode.value = s.mappingMode
         mainHandlerUpdateLogs()
@@ -396,42 +416,67 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // E-Reader status row
+                // E-Reader / KOReader status row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    val color = when (hidConnectionState.value) {
-                        BluetoothProfile.STATE_CONNECTED -> Color.Green
-                        BluetoothProfile.STATE_CONNECTING -> Color.Cyan
-                        else -> Color.Gray
+                    if (connectionMode.value == 2) {
+                        val isConnected = isKoreaderConnected.value
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(
+                                    color = if (isConnected) Color.Green else Color.Gray,
+                                    shape = CircleShape
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "KOReader Link: ",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = if (isConnected) "Connected (${koreaderIp.value}:${koreaderPort.value})" else "Disconnected",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isConnected) Color.Green else Color.White
+                        )
+                    } else {
+                        val color = when (hidConnectionState.value) {
+                            BluetoothProfile.STATE_CONNECTED -> Color.Green
+                            BluetoothProfile.STATE_CONNECTING -> Color.Cyan
+                            else -> Color.Gray
+                        }
+                        val text = when (hidConnectionState.value) {
+                            BluetoothProfile.STATE_CONNECTED -> connectedReaderDeviceName.value ?: "Connected"
+                            BluetoothProfile.STATE_CONNECTING -> "Connecting..."
+                            else -> "Disconnected"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(
+                                    color = color,
+                                    shape = CircleShape
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "E-Reader HID: ",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (hidConnectionState.value == BluetoothProfile.STATE_CONNECTED) Color.Green else Color.White
+                        )
                     }
-                    val text = when (hidConnectionState.value) {
-                        BluetoothProfile.STATE_CONNECTED -> connectedReaderDeviceName.value ?: "Connected"
-                        BluetoothProfile.STATE_CONNECTING -> "Connecting..."
-                        else -> "Disconnected"
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(
-                                color = color,
-                                shape = CircleShape
-                            )
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "E-Reader HID: ",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.Gray
-                    )
-                    Text(
-                        text = text,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (hidConnectionState.value == BluetoothProfile.STATE_CONNECTED) Color.Green else Color.White
-                    )
                 }
             }
         }
@@ -441,6 +486,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun DeviceConnectionCard() {
         var expanded by remember { mutableStateOf(false) }
+        var modeExpanded by remember { mutableStateOf(false) }
 
         Card(
             shape = RoundedCornerShape(12.dp),
@@ -458,21 +504,17 @@ class MainActivity : ComponentActivity() {
                     color = Color.White
                 )
 
-                // Select Device Dropdown
+                // Mode selector (Bluetooth vs KOReader)
                 ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded },
+                    expanded = modeExpanded,
+                    onExpandedChange = { modeExpanded = !modeExpanded },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     TextField(
                         readOnly = true,
-                        value = if (ActivityCompat.checkSelfPermission(this@MainActivity, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                            selectedDevice.value?.let { "${it.name ?: "Unknown"} (${it.address})" } ?: "No paired devices found"
-                        } else {
-                            "Permission missing"
-                        },
+                        value = if (connectionMode.value == 2) "KOReader HTTP Inspector" else "Bluetooth HID (Keyboard)",
                         onValueChange = {},
-                        label = { Text("Select Paired E-Reader") },
+                        label = { Text("Connection Mode") },
                         trailingIcon = {
                             Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = "Dropdown")
                         },
@@ -488,79 +530,219 @@ class MainActivity : ComponentActivity() {
                     )
 
                     ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        expanded = modeExpanded,
+                        onDismissRequest = { modeExpanded = false }
                     ) {
-                        pairedDevices.forEach { device ->
-                            DropdownMenuItem(
-                                text = {
-                                    val name = if (ActivityCompat.checkSelfPermission(this@MainActivity, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                                        device.name ?: "Unknown"
-                                    } else {
-                                        "Unknown"
-                                    }
-                                    Text("${name} (${device.address})")
-                                },
-                                onClick = {
-                                    selectedDevice.value = device
-                                    expanded = false
-                                }
-                            )
+                        DropdownMenuItem(
+                            text = { Text("Bluetooth HID (Keyboard)") },
+                            onClick = {
+                                connectionMode.value = 1
+                                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                                    .edit().putInt(KEY_CONNECTION_MODE, 1).apply()
+                                hidService?.connectionMode = 1
+                                modeExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("KOReader HTTP Inspector") },
+                            onClick = {
+                                connectionMode.value = 2
+                                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                                    .edit().putInt(KEY_CONNECTION_MODE, 2).apply()
+                                hidService?.connectionMode = 2
+                                modeExpanded = false
+                            }
+                        )
+                    }
+                }
+
+                Divider(color = Color.Gray.copy(alpha = 0.2f))
+
+                if (connectionMode.value == 2) {
+                    // KOReader HTTP settings input
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        TextField(
+                            value = koreaderIp.value,
+                            onValueChange = { newVal ->
+                                koreaderIp.value = newVal
+                                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                                    .edit().putString(KEY_KOREADER_IP, newVal).apply()
+                                hidService?.koreaderIp = newVal
+                            },
+                            label = { Text("KOReader IP Address") },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF2C2C2C),
+                                unfocusedContainerColor = Color(0xFF2C2C2C),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.weight(2f)
+                        )
+
+                        TextField(
+                            value = koreaderPort.value,
+                            onValueChange = { newVal ->
+                                koreaderPort.value = newVal
+                                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                                    .edit().putString(KEY_KOREADER_PORT, newVal).apply()
+                                hidService?.koreaderPort = newVal.toIntOrNull() ?: 8080
+                            },
+                            label = { Text("Port") },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF2C2C2C),
+                                unfocusedContainerColor = Color(0xFF2C2C2C),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    // Connect/Disconnect for KOReader
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val portVal = koreaderPort.value.toIntOrNull() ?: 8080
+                                hidService?.connectToKoReader(koreaderIp.value, portVal)
+                            },
+                            enabled = isServiceRunning.value && !isKoreaderConnected.value && koreaderIp.value.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Connect", color = Color.White)
+                        }
+
+                        Button(
+                            onClick = {
+                                hidService?.disconnectKoReader()
+                            },
+                            enabled = isServiceRunning.value && isKoreaderConnected.value,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Disconnect", color = Color.White)
                         }
                     }
-                }
-
-                // Connect/Disconnect & Pairing Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            selectedDevice.value?.let { hidService?.connectToDevice(it) }
-                        },
-                        enabled = isServiceRunning.value && hidConnectionState.value == BluetoothProfile.STATE_DISCONNECTED && selectedDevice.value != null,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.weight(1f)
+                } else {
+                    // Select Device Dropdown
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Connect", color = Color.White)
+                        TextField(
+                            readOnly = true,
+                            value = if (ActivityCompat.checkSelfPermission(
+                                    this@MainActivity,
+                                    Manifest.permission.BLUETOOTH_CONNECT
+                                ) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                            ) {
+                                selectedDevice.value?.let { "${it.name ?: "Unknown"} (${it.address})" }
+                                    ?: "No paired devices found"
+                            } else {
+                                "Permission missing"
+                            },
+                            onValueChange = {},
+                            label = { Text("Select Paired E-Reader") },
+                            trailingIcon = {
+                                Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = "Dropdown")
+                            },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color(0xFF2C2C2C),
+                                unfocusedContainerColor = Color(0xFF2C2C2C),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth()
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            pairedDevices.forEach { device ->
+                                DropdownMenuItem(
+                                    text = {
+                                        val name = if (ActivityCompat.checkSelfPermission(
+                                                this@MainActivity,
+                                                Manifest.permission.BLUETOOTH_CONNECT
+                                            ) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                                        ) {
+                                            device.name ?: "Unknown"
+                                        } else {
+                                            "Unknown"
+                                        }
+                                        Text("${name} (${device.address})")
+                                    },
+                                    onClick = {
+                                        selectedDevice.value = device
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
 
-                    Button(
-                        onClick = {
-                            hidService?.disconnectDevice()
-                        },
-                        enabled = isServiceRunning.value && hidConnectionState.value == BluetoothProfile.STATE_CONNECTED,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                        modifier = Modifier.weight(1f)
+                    // Connect/Disconnect & Pairing Action Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Disconnect", color = Color.White)
-                    }
-                }
+                        Button(
+                            onClick = {
+                                selectedDevice.value?.let { hidService?.connectToDevice(it) }
+                            },
+                            enabled = isServiceRunning.value && hidConnectionState.value == BluetoothProfile.STATE_DISCONNECTED && selectedDevice.value != null,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Connect", color = Color.White)
+                        }
 
-                // Discoverability & Check Connection Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { makePhoneDiscoverable() },
-                        enabled = isServiceRunning.value,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Pairing Mode", textAlign = TextAlign.Center)
+                        Button(
+                            onClick = {
+                                hidService?.disconnectDevice()
+                            },
+                            enabled = isServiceRunning.value && hidConnectionState.value == BluetoothProfile.STATE_CONNECTED,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Disconnect", color = Color.White)
+                        }
                     }
 
-                    OutlinedButton(
-                        onClick = { hidService?.checkForAlreadyConnectedHidDevices() },
-                        enabled = isServiceRunning.value && hidConnectionState.value == BluetoothProfile.STATE_DISCONNECTED,
-                        border = BorderStroke(1.dp, Color.Gray),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                        modifier = Modifier.weight(1f)
+                    // Discoverability & Check Connection Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Check Connection", textAlign = TextAlign.Center)
+                        OutlinedButton(
+                            onClick = { makePhoneDiscoverable() },
+                            enabled = isServiceRunning.value,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Pairing Mode", textAlign = TextAlign.Center)
+                        }
+
+                        OutlinedButton(
+                            onClick = { hidService?.checkForAlreadyConnectedHidDevices() },
+                            enabled = isServiceRunning.value && hidConnectionState.value == BluetoothProfile.STATE_DISCONNECTED,
+                            border = BorderStroke(1.dp, Color.Gray),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Check Connection", textAlign = TextAlign.Center)
+                        }
                     }
                 }
             }
